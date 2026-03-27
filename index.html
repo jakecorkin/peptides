@@ -24,6 +24,7 @@ const state = {
   patientTab: 'careplan',
   selectedLab: null,
   labFilter: 'all',
+  expandedOrder: null,
   cart: [],
   notification: null,
 }
@@ -68,6 +69,56 @@ const products = [
   { id: 6, name: 'Metabolic Panel', category: 'lab', description: 'Full metabolic health assessment: insulin, HbA1c, lipid panel, thyroid (TSH, T3, T4), CMP, and inflammatory markers.', price: 149, unit: 'test', icon: '🧪' },
   { id: 7, name: 'GLP-1 Support Stack', category: 'supplement', description: 'Berberine, chromium, and alpha-lipoic acid to support metabolic health, glucose regulation, and weight management.', price: 75, unit: 'bottle', icon: '💊' },
   { id: 8, name: 'Growth Hormone Panel', category: 'lab', description: 'IGF-1, IGFBP-3, and growth hormone stimulation markers for longevity optimization and performance assessment.', price: 249, unit: 'test', icon: '📊' },
+]
+
+const orderHistory = [
+  {
+    id: 1, patientId: 1, productId: 1, productName: 'BPC-157', productIcon: '🧬',
+    orderedDate: '2026-02-18', amount: 89, status: 'delivered',
+    carrier: 'UPS', trackingNumber: '1Z999AA10123456784', deliveredDate: '2026-02-24',
+    tracking: [
+      { date: '2026-02-18', time: '10:02 AM', event: 'Order placed', location: 'Online', done: true },
+      { date: '2026-02-19', time: '2:15 PM', event: 'Package picked up by carrier', location: 'Salt Lake City, UT', done: true },
+      { date: '2026-02-21', time: '8:42 AM', event: 'In transit', location: 'Denver, CO', done: true },
+      { date: '2026-02-23', time: '11:58 PM', event: 'Out for delivery', location: 'Austin, TX', done: true },
+      { date: '2026-02-24', time: '2:47 PM', event: 'Delivered — left at front door', location: 'Austin, TX', done: true },
+    ],
+  },
+  {
+    id: 2, patientId: 1, productId: 3, productName: 'NAD+ Boost', productIcon: '⚡',
+    orderedDate: '2026-03-20', amount: 65, status: 'in_transit',
+    carrier: 'FedEx', trackingNumber: '7489234590847234', estimatedDelivery: '2026-03-29',
+    tracking: [
+      { date: '2026-03-20', time: '3:44 PM', event: 'Order placed', location: 'Online', done: true },
+      { date: '2026-03-21', time: '9:10 AM', event: 'Package picked up by carrier', location: 'Salt Lake City, UT', done: true },
+      { date: '2026-03-23', time: '6:30 AM', event: 'In transit', location: 'Phoenix, AZ', done: true },
+      { date: '2026-03-25', time: '11:15 PM', event: 'Arrived at regional facility', location: 'Dallas, TX', done: true },
+      { date: '2026-03-29', time: '', event: 'Out for delivery', location: 'Austin, TX', done: false },
+      { date: '2026-03-29', time: '', event: 'Delivered', location: 'Austin, TX', done: false },
+    ],
+  },
+  {
+    id: 3, patientId: 1, productId: 5, productName: 'Testosterone Panel', productIcon: '🔬',
+    orderedDate: '2026-03-25', amount: 199, status: 'processing',
+    carrier: null, trackingNumber: null, estimatedDelivery: '2026-04-01',
+    tracking: [
+      { date: '2026-03-25', time: '4:12 PM', event: 'Order placed', location: 'Online', done: true },
+      { date: '2026-03-26', time: '10:00 AM', event: 'Lab kit being prepared', location: 'Lab Processing Center', done: true },
+      { date: '2026-03-28', time: '', event: 'Kit shipped to you', location: '', done: false },
+      { date: '2026-04-01', time: '', event: 'Collect sample & return', location: '', done: false },
+    ],
+  },
+  {
+    id: 4, patientId: 1, productId: 3, productName: 'NAD+ Boost', productIcon: '⚡',
+    orderedDate: '2026-01-05', amount: 65, status: 'delivered',
+    carrier: 'UPS', trackingNumber: '1Z999AA10123456000', deliveredDate: '2026-01-10',
+    tracking: [
+      { date: '2026-01-05', time: '11:00 AM', event: 'Order placed', location: 'Online', done: true },
+      { date: '2026-01-06', time: '1:30 PM', event: 'Package picked up by carrier', location: 'Salt Lake City, UT', done: true },
+      { date: '2026-01-09', time: '4:22 PM', event: 'In transit', location: 'Albuquerque, NM', done: true },
+      { date: '2026-01-10', time: '11:48 AM', event: 'Delivered', location: 'Austin, TX', done: true },
+    ],
+  },
 ]
 
 const referrals = [
@@ -146,6 +197,7 @@ function render() {
     doctorLabs: renderDoctorLabs,
     patientDashboard: renderPatientDashboard,
     patientShop: renderPatientShop,
+    patientOrders: renderPatientOrders,
     patientMessages: renderPatientMessages,
     patientLabs: renderPatientLabs,
   }
@@ -224,6 +276,7 @@ function patientSidebar(active) {
   const nav = [
     { label: 'My Dashboard', view: 'patientDashboard', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>' },
     { label: 'Shop & Order', view: 'patientShop', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>' },
+    { label: 'Orders', view: 'patientOrders', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>' },
     { label: 'Messages', view: 'patientMessages', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>' },
     { label: 'Labs', view: 'patientLabs', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>' },
   ]
@@ -1327,6 +1380,161 @@ function renderLabDetail(lab) {
       </div>
     </div>
   `
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PATIENT — ORDERS
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderPatientOrders() {
+  const patient = patients[0]
+  const myOrders = orderHistory.filter(o => o.patientId === patient.id)
+    .sort((a, b) => new Date(b.orderedDate) - new Date(a.orderedDate))
+  const inTransit = myOrders.filter(o => o.status === 'in_transit' || o.status === 'processing')
+  const completed = myOrders.filter(o => o.status === 'delivered')
+
+  const statusStyles = {
+    delivered:   { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Delivered' },
+    in_transit:  { bg: 'bg-blue-100',    text: 'text-blue-700',    label: 'In Transit' },
+    processing:  { bg: 'bg-amber-100',   text: 'text-amber-700',   label: 'Processing' },
+  }
+
+  function trackingTimeline(order) {
+    const steps = order.tracking
+    const lastDone = steps.reduce((last, s, i) => s.done ? i : last, -1)
+    return `
+      <div class="mt-4 pt-4 border-t border-gray-100">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold text-gray-600 uppercase tracking-wide">Tracking</span>
+          ${order.trackingNumber ? `
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-400">${order.carrier} · ${order.trackingNumber}</span>
+            </div>
+          ` : ''}
+        </div>
+        <div class="space-y-0">
+          ${steps.map((step, i) => {
+            const isLatest = i === lastDone
+            const isDone = step.done
+            return `
+              <div class="flex gap-3 ${i < steps.length - 1 ? 'pb-3' : ''}">
+                <!-- Icon + line -->
+                <div class="flex flex-col items-center flex-shrink-0">
+                  <div class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${isLatest ? 'bg-indigo-600 ring-4 ring-indigo-100' : isDone ? 'bg-emerald-500' : 'bg-gray-200'}">
+                    ${isLatest
+                      ? '<svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14M12 5l7 7-7 7"/></svg>'
+                      : isDone
+                      ? '<svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>'
+                      : '<div class="w-2 h-2 rounded-full bg-gray-400"></div>'
+                    }
+                  </div>
+                  ${i < steps.length - 1 ? `<div class="w-px flex-1 mt-1 ${isDone ? 'bg-emerald-300' : 'bg-gray-200'}"></div>` : ''}
+                </div>
+                <!-- Content -->
+                <div class="flex-1 pb-0.5">
+                  <div class="flex items-baseline gap-2 flex-wrap">
+                    <span class="text-sm font-medium ${isDone ? 'text-gray-900' : 'text-gray-400'}">${step.event}</span>
+                    ${step.time ? `<span class="text-xs text-gray-400">${step.date} · ${step.time}</span>` : step.date ? `<span class="text-xs text-gray-400">${step.date}</span>` : '<span class="text-xs text-gray-400">Estimated</span>'}
+                  </div>
+                  ${step.location ? `<div class="text-xs text-gray-400 mt-0.5">${step.location}</div>` : ''}
+                </div>
+              </div>
+            `
+          }).join('')}
+        </div>
+        ${order.estimatedDelivery && order.status !== 'delivered' ? `
+          <div class="mt-3 p-3 bg-indigo-50 rounded-lg text-xs text-indigo-700 font-medium">
+            Estimated delivery: <strong>${order.estimatedDelivery}</strong>
+          </div>
+        ` : ''}
+      </div>
+    `
+  }
+
+  return wrap(patientSidebar('patientOrders'), `
+    <div class="p-8 max-w-3xl fade-in">
+      <div class="mb-8">
+        <h1 class="text-2xl font-bold text-gray-900">Orders</h1>
+        <p class="text-gray-400 mt-1 text-sm">${myOrders.length} order${myOrders.length !== 1 ? 's' : ''} total · ${inTransit.length} in transit</p>
+      </div>
+
+      <!-- Stats -->
+      <div class="grid grid-cols-3 gap-4 mb-8">
+        <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm text-center">
+          <div class="text-2xl font-bold text-gray-900">${myOrders.length}</div>
+          <div class="text-xs text-gray-400 mt-1">Total Orders</div>
+        </div>
+        <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm text-center">
+          <div class="text-2xl font-bold text-blue-600">${inTransit.length}</div>
+          <div class="text-xs text-gray-400 mt-1">In Transit</div>
+        </div>
+        <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm text-center">
+          <div class="text-2xl font-bold text-emerald-600">${completed.length}</div>
+          <div class="text-xs text-gray-400 mt-1">Delivered</div>
+        </div>
+      </div>
+
+      <!-- In Transit -->
+      ${inTransit.length > 0 ? `
+        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">In Transit & Processing</h2>
+        <div class="space-y-4 mb-8">
+          ${inTransit.map(order => {
+            const s = statusStyles[order.status]
+            return `
+              <div class="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                <div class="p-5">
+                  <div class="flex items-start justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                      <span class="text-3xl">${order.productIcon}</span>
+                      <div>
+                        <div class="font-bold text-gray-900">${order.productName}</div>
+                        <div class="text-xs text-gray-400 mt-0.5">Ordered ${order.orderedDate} · $${order.amount}</div>
+                      </div>
+                    </div>
+                    <span class="text-xs font-semibold px-3 py-1.5 rounded-full ${s.bg} ${s.text} flex-shrink-0">${s.label}</span>
+                  </div>
+                  ${trackingTimeline(order)}
+                </div>
+              </div>
+            `
+          }).join('')}
+        </div>
+      ` : ''}
+
+      <!-- Completed -->
+      ${completed.length > 0 ? `
+        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Delivered</h2>
+        <div class="space-y-3">
+          ${completed.map(order => {
+            const s = statusStyles[order.status]
+            const expanded = state.expandedOrder === order.id
+            return `
+              <div class="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                <div class="p-5">
+                  <div class="flex items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                      <span class="text-2xl">${order.productIcon}</span>
+                      <div>
+                        <div class="font-semibold text-gray-900">${order.productName}</div>
+                        <div class="text-xs text-gray-400 mt-0.5">Ordered ${order.orderedDate} · Delivered ${order.deliveredDate}</div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-3 flex-shrink-0">
+                      <span class="font-bold text-gray-700">$${order.amount}</span>
+                      <span class="text-xs font-semibold px-3 py-1.5 rounded-full ${s.bg} ${s.text}">${s.label}</span>
+                      <button onclick="navigate('patientOrders', {expandedOrder: ${expanded ? 'null' : order.id}})" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
+                        ${expanded ? 'Hide' : 'Tracking'}
+                      </button>
+                    </div>
+                  </div>
+                  ${expanded ? trackingTimeline(order) : ''}
+                </div>
+              </div>
+            `
+          }).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
