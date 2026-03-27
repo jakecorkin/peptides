@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PeptideRx — Practitioner & Patient Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .fade-in { animation: fadeIn 0.18s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  </style>
+</head>
+<body class="bg-slate-50 font-sans antialiased">
+<div id="app"></div>
+
+<script>
+// ─── STATE ──────────────────────────────────────────────────────────────────
+const state = {
+  view: 'login',
+  user: null,
+  selectedPatient: null,
+  patientTab: 'careplan',
+  cart: [],
+  notification: null,
+}
+
+// ─── MOCK DATA ───────────────────────────────────────────────────────────────
+const doctors = [
+  { id: 1, name: 'Dr. Sarah Chen', specialty: 'Functional Medicine', avatar: 'SC', email: 'sarah@peptiderx.com', earnings: 1240, pendingEarnings: 380 },
+  { id: 2, name: 'Dr. Marcus Williams', specialty: 'Regenerative Medicine', avatar: 'MW', email: 'marcus@peptiderx.com', earnings: 890, pendingEarnings: 220 },
+  { id: 3, name: 'Dr. Lisa Park', specialty: 'Anti-Aging & Longevity', avatar: 'LP', email: 'lisa@peptiderx.com', earnings: 560, pendingEarnings: 0 },
+]
+
+const patients = [
+  {
+    id: 1, name: 'John Smith', age: 42, email: 'john@example.com', avatar: 'JS',
+    conditions: ['Fatigue', 'Low Testosterone'], doctorId: 1, referredBy: null,
+    carePlan: [1, 3, 5],
+    orders: [{ id: 1, product: 'BPC-157', date: '2026-03-01', status: 'delivered', amount: 89 }],
+    instructions: 'BPC-157: Inject 250mcg subcutaneously daily for 8 weeks. Rotate injection sites. Take with food if any GI discomfort.\n\nNAD+ Boost: Take 1 capsule daily in the morning on an empty stomach. Mild flushing is normal.'
+  },
+  {
+    id: 2, name: 'Emily Rodriguez', age: 35, email: 'emily@example.com', avatar: 'ER',
+    conditions: ['Recovery Optimization', 'Gut Health'], doctorId: 1, referredBy: null,
+    carePlan: [2, 4],
+    orders: [{ id: 2, product: 'TB-500', date: '2026-03-10', status: 'processing', amount: 120 }],
+    instructions: 'TB-500: Inject 500mcg twice weekly for 4 weeks, then reduce to once weekly for maintenance.\n\nOmega-3 Ultra: Take 2 capsules with dinner daily.'
+  },
+  {
+    id: 3, name: 'Michael Torres', age: 51, email: 'michael@example.com', avatar: 'MT',
+    conditions: ['Metabolic Health', 'Joint Pain'], doctorId: 1, referredBy: 2,
+    carePlan: [3, 6, 7],
+    orders: [],
+    instructions: 'Metabolic Panel: Schedule lab collection at a Quest or LabCorp near you. Fast for 12 hours beforehand.\n\nGLP-1 Support Stack: Take 2 capsules twice daily with meals.'
+  },
+]
+
+const products = [
+  { id: 1, name: 'BPC-157', category: 'peptide', description: 'Body protection compound for accelerated healing, gut repair, and recovery optimization. One of the most well-studied peptides for injury recovery.', price: 89, unit: 'vial', icon: '🧬' },
+  { id: 2, name: 'TB-500', category: 'peptide', description: 'Thymosin beta-4 for enhanced tissue repair, reduced inflammation, and improved flexibility. Commonly used for musculoskeletal recovery.', price: 120, unit: 'vial', icon: '💉' },
+  { id: 3, name: 'NAD+ Boost', category: 'supplement', description: 'Nicotinamide adenine dinucleotide precursor for cellular energy production, cognitive clarity, and longevity support.', price: 65, unit: 'bottle', icon: '⚡' },
+  { id: 4, name: 'Omega-3 Ultra', category: 'supplement', description: 'High-potency triglyceride-form fish oil for cardiovascular health, inflammation reduction, and brain function support.', price: 45, unit: 'bottle', icon: '🐟' },
+  { id: 5, name: 'Testosterone Panel', category: 'lab', description: 'Comprehensive hormone panel: total & free testosterone, estradiol, LH, FSH, DHEA-S, SHBG, and prolactin.', price: 199, unit: 'test', icon: '🔬' },
+  { id: 6, name: 'Metabolic Panel', category: 'lab', description: 'Full metabolic health assessment: insulin, HbA1c, lipid panel, thyroid (TSH, T3, T4), CMP, and inflammatory markers.', price: 149, unit: 'test', icon: '🧪' },
+  { id: 7, name: 'GLP-1 Support Stack', category: 'supplement', description: 'Berberine, chromium, and alpha-lipoic acid to support metabolic health, glucose regulation, and weight management.', price: 75, unit: 'bottle', icon: '💊' },
+  { id: 8, name: 'Growth Hormone Panel', category: 'lab', description: 'IGF-1, IGFBP-3, and growth hormone stimulation markers for longevity optimization and performance assessment.', price: 249, unit: 'test', icon: '📊' },
+]
+
+const referrals = [
+  { id: 1, fromDoctorId: 1, toDoctorId: 2, patientId: 1, date: '2026-01-20', status: 'active', commissionRate: 0.15, earned: 89 },
+  { id: 2, fromDoctorId: 2, toDoctorId: 1, patientId: 3, date: '2026-02-15', status: 'active', commissionRate: 0.15, earned: 0 },
+]
+
+const messages = [
+  { id: 1, from: 'patient_1', to: 'doctor_1', text: "Hi Dr. Chen, I wanted to check in — the BPC-157 seems to be really helping with my recovery after workouts. Should I continue the same dosage?", time: '9:41 AM', date: '2026-03-26', read: false },
+  { id: 2, from: 'doctor_1', to: 'patient_1', text: "Great to hear, John! Yes, continue with the current protocol for another 4 weeks, then we'll reassess. Are you keeping the injection log I sent you?", time: '10:05 AM', date: '2026-03-26', read: true },
+  { id: 3, from: 'patient_2', to: 'doctor_1', text: "Quick question about the TB-500 — is it normal to feel slightly warm after injection? It only lasts a few minutes.", time: '2:30 PM', date: '2026-03-26', read: false },
+]
+
+// ─── ROUTER ──────────────────────────────────────────────────────────────────
+function navigate(view, extra = {}) {
+  Object.assign(state, extra)
+  state.view = view
+  render()
+  window.scrollTo(0, 0)
+}
+
+function render() {
+  const app = document.getElementById('app')
+  const views = {
+    login: renderLogin,
+    doctorDashboard: renderDoctorDashboard,
+    doctorPatient: renderDoctorPatient,
+    doctorReferrals: renderDoctorReferrals,
+    doctorMessages: renderDoctorMessages,
+    patientDashboard: renderPatientDashboard,
+    patientShop: renderPatientShop,
+    patientMessages: renderPatientMessages,
+  }
+  app.innerHTML = views[state.view]?.() ?? '<p class="p-8 text-gray-400">Unknown view</p>'
+  attachHandlers()
+}
+
+// ─── UTILITIES ───────────────────────────────────────────────────────────────
+function categoryBadge(cat) {
+  const styles = { peptide: 'bg-violet-100 text-violet-700', supplement: 'bg-emerald-100 text-emerald-700', lab: 'bg-blue-100 text-blue-700' }
+  return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${styles[cat] || 'bg-gray-100 text-gray-600'}">${cat.charAt(0).toUpperCase() + cat.slice(1)}</span>`
+}
+
+function statusBadge(status) {
+  const styles = { delivered: 'bg-emerald-100 text-emerald-700', processing: 'bg-amber-100 text-amber-700', active: 'bg-blue-100 text-blue-700', pending: 'bg-gray-100 text-gray-500' }
+  return `<span class="px-2.5 py-1 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-100 text-gray-600'}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>`
+}
+
+function showNotification(msg) {
+  state.notification = msg
+  render()
+  setTimeout(() => { state.notification = null; render() }, 2800)
+}
+
+function notificationBanner() {
+  if (!state.notification) return ''
+  return `<div class="fixed top-5 right-5 z-50 bg-emerald-500 text-white px-5 py-3 rounded-xl shadow-xl text-sm font-medium fade-in flex items-center gap-2"><span>✓</span> ${state.notification}</div>`
+}
+
+// ─── DOCTOR SIDEBAR ───────────────────────────────────────────────────────────
+function doctorSidebar(active) {
+  const unread = messages.filter(m => m.to === 'doctor_1' && !m.read).length
+  const nav = [
+    { label: 'Dashboard', view: 'doctorDashboard', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>' },
+    { label: 'Patients', view: 'doctorPatient', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>' },
+    { label: 'Referrals', view: 'doctorReferrals', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>' },
+    { label: 'Messages', view: 'doctorMessages', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>', badge: unread },
+  ]
+  return `
+    <aside class="w-60 bg-gradient-to-b from-indigo-950 to-indigo-900 text-white flex flex-col min-h-screen fixed left-0 top-0 z-20">
+      <div class="p-5 border-b border-white/10">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-white/15 rounded-lg flex items-center justify-center text-sm">⚕</div>
+          <div>
+            <div class="font-bold text-sm tracking-tight">PeptideRx</div>
+            <div class="text-indigo-400 text-xs">Practitioner Portal</div>
+          </div>
+        </div>
+      </div>
+      <nav class="flex-1 p-3 space-y-0.5">
+        ${nav.map(item => `
+          <button onclick="navigate('${item.view}')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${active === item.view ? 'bg-white/15 text-white' : 'text-indigo-300 hover:bg-white/10 hover:text-white'}">
+            ${item.icon}
+            <span>${item.label}</span>
+            ${item.badge ? `<span class="ml-auto bg-rose-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">${item.badge}</span>` : ''}
+          </button>
+        `).join('')}
+      </nav>
+      <div class="p-4 border-t border-white/10">
+        <div class="flex items-center gap-3 px-2 py-1.5 mb-2">
+          <div class="w-8 h-8 rounded-full bg-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0">SC</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium truncate">Dr. Sarah Chen</div>
+            <div class="text-indigo-400 text-xs">Functional Medicine</div>
+          </div>
+        </div>
+        <button onclick="navigate('login')" class="w-full text-xs text-indigo-500 hover:text-indigo-300 py-1 transition-colors text-center">Sign out</button>
+      </div>
+    </aside>
+  `
+}
+
+// ─── PATIENT SIDEBAR ─────────────────────────────────────────────────────────
+function patientSidebar(active) {
+  const nav = [
+    { label: 'My Dashboard', view: 'patientDashboard', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>' },
+    { label: 'Shop & Order', view: 'patientShop', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>' },
+    { label: 'Messages', view: 'patientMessages', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>' },
+  ]
+  return `
+    <aside class="w-60 bg-gradient-to-b from-teal-900 to-teal-800 text-white flex flex-col min-h-screen fixed left-0 top-0 z-20">
+      <div class="p-5 border-b border-white/10">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-white/15 rounded-lg flex items-center justify-center text-sm">⚕</div>
+          <div>
+            <div class="font-bold text-sm tracking-tight">PeptideRx</div>
+            <div class="text-teal-400 text-xs">Patient Portal</div>
+          </div>
+        </div>
+      </div>
+      <nav class="flex-1 p-3 space-y-0.5">
+        ${nav.map(item => `
+          <button onclick="navigate('${item.view}')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${active === item.view ? 'bg-white/15 text-white' : 'text-teal-300 hover:bg-white/10 hover:text-white'}">
+            ${item.icon}
+            <span>${item.label}</span>
+          </button>
+        `).join('')}
+      </nav>
+      <div class="p-4 border-t border-white/10">
+        <div class="flex items-center gap-3 px-2 py-1.5 mb-2">
+          <div class="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-xs font-bold flex-shrink-0">JS</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium truncate">John Smith</div>
+            <div class="text-teal-400 text-xs">Patient</div>
+          </div>
+        </div>
+        <button onclick="navigate('login')" class="w-full text-xs text-teal-500 hover:text-teal-300 py-1 transition-colors text-center">Sign out</button>
+      </div>
+    </aside>
+  `
+}
+
+function wrap(sidebar, content) {
+  return `
+    <div class="flex">
+      ${sidebar}
+      <main class="ml-60 flex-1 min-h-screen bg-slate-50">
+        ${notificationBanner()}
+        ${content}
+      </main>
+    </div>
+  `
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGIN
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderLogin() {
+  return `
+    <div class="min-h-screen bg-gradient-to-br from-indigo-950 via-indigo-900 to-violet-900 flex items-center justify-center p-6">
+      ${notificationBanner()}
+      <div class="w-full max-w-md">
+        <div class="text-center mb-10">
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-white/10 rounded-2xl mb-5 text-3xl backdrop-blur">⚕</div>
+          <h1 class="text-4xl font-bold text-white tracking-tight">PeptideRx</h1>
+          <p class="text-indigo-300 mt-2 text-sm">Personalized health protocols, delivered.</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
+          <div class="p-8">
+            <h2 class="text-xl font-semibold text-gray-900 mb-6">Sign in to your portal</h2>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">Email address</label>
+                <input type="email" value="sarah@peptiderx.com" class="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-700">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+                <input type="password" value="••••••••" class="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-700">
+              </div>
+            </div>
+          </div>
+          <div class="px-8 pb-8 pt-2 space-y-3 border-t border-gray-50">
+            <div class="text-center text-xs text-gray-400 font-medium uppercase tracking-widest py-2">Quick demo access</div>
+            <button onclick="navigate('doctorDashboard', {user: {type:'doctor', id:1}})" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2.5 text-sm">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+              Enter as Doctor — Dr. Sarah Chen
+            </button>
+            <button onclick="navigate('patientDashboard', {user: {type:'patient', id:1}})" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2.5 text-sm">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+              Enter as Patient — John Smith
+            </button>
+            <p class="text-center text-xs text-gray-300 pt-1">Prototype · No real authentication</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOCTOR DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderDoctorDashboard() {
+  const doctor = doctors[0]
+  const myPatients = patients.filter(p => p.doctorId === 1)
+  const unread = messages.filter(m => m.to === 'doctor_1' && !m.read).length
+  const myReferralsOut = referrals.filter(r => r.fromDoctorId === 1)
+
+  return wrap(doctorSidebar('doctorDashboard'), `
+    <div class="p-8 max-w-6xl fade-in">
+      <div class="mb-8">
+        <h1 class="text-2xl font-bold text-gray-900">Good morning, Dr. Chen 👋</h1>
+        <p class="text-gray-400 mt-1 text-sm">Friday, March 27, 2026</p>
+      </div>
+
+      <!-- Stats Row -->
+      <div class="grid grid-cols-4 gap-4 mb-8">
+        <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+          <div class="text-3xl font-bold text-gray-900">${myPatients.length}</div>
+          <div class="text-sm text-gray-500 mt-1">Active Patients</div>
+          <div class="mt-3 text-xs text-indigo-600 font-medium">↑ 2 this month</div>
+        </div>
+        <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+          <div class="text-3xl font-bold text-rose-500">${unread}</div>
+          <div class="text-sm text-gray-500 mt-1">Unread Messages</div>
+          <button onclick="navigate('doctorMessages')" class="mt-3 text-xs text-indigo-600 font-medium hover:underline block">View all →</button>
+        </div>
+        <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+          <div class="text-3xl font-bold text-emerald-600">$${doctor.earnings.toLocaleString()}</div>
+          <div class="text-sm text-gray-500 mt-1">Referral Earnings</div>
+          <div class="mt-3 text-xs text-amber-600 font-medium">$${doctor.pendingEarnings} pending payout</div>
+        </div>
+        <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+          <div class="text-3xl font-bold text-gray-900">${myReferralsOut.length}</div>
+          <div class="text-sm text-gray-500 mt-1">Outgoing Referrals</div>
+          <button onclick="navigate('doctorReferrals')" class="mt-3 text-xs text-indigo-600 font-medium hover:underline block">Manage →</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-5 gap-6">
+        <!-- Patients -->
+        <div class="col-span-3 bg-white rounded-xl border border-gray-100 shadow-sm">
+          <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+            <h2 class="font-semibold text-gray-800">Your Patients</h2>
+            <button onclick="navigate('doctorPatient')" class="text-sm text-indigo-600 hover:underline font-medium">View all</button>
+          </div>
+          <div class="divide-y divide-gray-50">
+            ${myPatients.map(p => {
+              const ref = referrals.find(r => r.patientId === p.id && r.toDoctorId === 1)
+              const refDoc = ref ? doctors.find(d => d.id === ref.fromDoctorId) : null
+              return `
+                <div class="p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors cursor-pointer" onclick="navigate('doctorPatient', {selectedPatient: ${p.id}, patientTab: 'careplan'})">
+                  <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold text-sm flex-shrink-0">${p.avatar}</div>
+                  <div class="flex-1 min-w-0">
+                    <div class="font-medium text-gray-900 text-sm">${p.name}</div>
+                    <div class="text-xs text-gray-400 mt-0.5">${p.conditions.join(' · ')}</div>
+                    ${refDoc ? `<div class="text-xs text-indigo-500 mt-1">Referred by ${refDoc.name} · 15% commission on orders</div>` : ''}
+                  </div>
+                  <div class="text-right text-xs text-gray-400 flex-shrink-0">
+                    <div>${p.carePlan.length} plan items</div>
+                    <div class="mt-0.5">${p.orders.length} order${p.orders.length !== 1 ? 's' : ''}</div>
+                  </div>
+                  <svg class="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </div>
+              `
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Messages + Referrals -->
+        <div class="col-span-2 space-y-5">
+          <div class="bg-white rounded-xl border border-gray-100 shadow-sm">
+            <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+              <h2 class="font-semibold text-gray-800">Recent Messages</h2>
+              <button onclick="navigate('doctorMessages')" class="text-sm text-indigo-600 hover:underline font-medium">View all</button>
+            </div>
+            <div class="divide-y divide-gray-50">
+              ${messages.filter(m => m.to === 'doctor_1').slice(0, 2).map(msg => {
+                const fromPat = patients.find(p => 'patient_' + p.id === msg.from)
+                return `
+                  <div class="p-4 hover:bg-slate-50 cursor-pointer transition-colors" onclick="navigate('doctorMessages')">
+                    <div class="flex items-start gap-3">
+                      <div class="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 text-xs font-bold flex-shrink-0">${fromPat?.avatar}</div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-1.5">
+                          <span class="text-sm font-medium text-gray-800">${fromPat?.name}</span>
+                          ${!msg.read ? '<div class="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0"></div>' : ''}
+                          <span class="text-xs text-gray-400 ml-auto">${msg.time}</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">${msg.text}</p>
+                      </div>
+                    </div>
+                  </div>
+                `
+              }).join('')}
+            </div>
+          </div>
+
+          <!-- Referral Earnings Card -->
+          <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white">
+            <div class="flex items-start justify-between">
+              <div>
+                <div class="text-sm opacity-80 mb-1">Referral Earnings — March</div>
+                <div class="text-3xl font-bold">$380</div>
+                <div class="text-sm opacity-70 mt-1">$89 from Michael Torres</div>
+              </div>
+              <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-xl">💰</div>
+            </div>
+            <button onclick="navigate('doctorReferrals')" class="mt-4 text-xs font-semibold text-white/80 hover:text-white flex items-center gap-1 transition-colors">
+              View referral network →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOCTOR — PATIENT PROFILE
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderDoctorPatient() {
+  const myPatients = patients.filter(p => p.doctorId === 1)
+  const selected = state.selectedPatient ? patients.find(p => p.id === state.selectedPatient) : myPatients[0]
+  const tab = state.patientTab || 'careplan'
+  const inboundRef = selected ? referrals.find(r => r.patientId === selected.id && r.toDoctorId === 1) : null
+  const refDoc = inboundRef ? doctors.find(d => d.id === inboundRef.fromDoctorId) : null
+
+  return wrap(doctorSidebar('doctorPatient'), `
+    <div class="flex h-screen overflow-hidden fade-in">
+      <!-- Patient List -->
+      <div class="w-72 bg-white border-r border-gray-100 flex flex-col flex-shrink-0 overflow-hidden">
+        <div class="p-5 border-b border-gray-100">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-semibold text-gray-800 text-sm">Patients (${myPatients.length})</h2>
+          </div>
+          <input type="text" placeholder="Search patients..." class="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div class="flex-1 overflow-y-auto divide-y divide-gray-50">
+          ${myPatients.map(p => {
+            const isSel = selected?.id === p.id
+            return `
+              <div onclick="navigate('doctorPatient', {selectedPatient: ${p.id}, patientTab: 'careplan'})" class="p-4 cursor-pointer transition-colors ${isSel ? 'bg-indigo-50 border-r-2 border-indigo-500' : 'hover:bg-slate-50'}">
+                <div class="flex items-center gap-3">
+                  <div class="w-9 h-9 rounded-full ${isSel ? 'bg-indigo-200 text-indigo-700' : 'bg-slate-100 text-slate-600'} flex items-center justify-center font-semibold text-sm flex-shrink-0">${p.avatar}</div>
+                  <div class="min-w-0">
+                    <div class="text-sm font-medium text-gray-900">${p.name}</div>
+                    <div class="text-xs text-gray-400">Age ${p.age} · ${p.carePlan.length} items</div>
+                  </div>
+                </div>
+                <div class="mt-2 flex gap-1 flex-wrap">
+                  ${p.conditions.map(c => `<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">${c}</span>`).join('')}
+                </div>
+              </div>
+            `
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Patient Detail -->
+      <div class="flex-1 flex flex-col overflow-hidden">
+        ${selected ? `
+          <!-- Header -->
+          <div class="bg-white border-b border-gray-100 p-6 flex-shrink-0">
+            <div class="flex items-start justify-between">
+              <div class="flex items-center gap-4">
+                <div class="w-14 h-14 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-lg">${selected.avatar}</div>
+                <div>
+                  <h1 class="text-xl font-bold text-gray-900">${selected.name}</h1>
+                  <div class="text-gray-400 text-sm mt-0.5">Age ${selected.age} · ${selected.email}</div>
+                  <div class="flex gap-1.5 mt-2">
+                    ${selected.conditions.map(c => `<span class="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full">${c}</span>`).join('')}
+                  </div>
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <button onclick="navigate('doctorMessages')" class="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-slate-50 transition-colors text-gray-700">Message</button>
+                <button id="referBtn" class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium">Refer Patient →</button>
+              </div>
+            </div>
+            ${refDoc ? `
+              <div class="mt-4 p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex items-center gap-2.5">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                <span>Referred by <strong>${refDoc.name}</strong> — you earn <strong>${inboundRef.commissionRate * 100}% commission</strong> on all products and labs ordered by this patient.</span>
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- Tabs -->
+          <div class="bg-white border-b border-gray-100 px-6 flex-shrink-0">
+            <div class="flex gap-6">
+              ${[['careplan','Care Plan'],['orders','Orders'],['messages','Messages']].map(([t, label]) => `
+                <button onclick="navigate('doctorPatient', {selectedPatient: ${selected.id}, patientTab: '${t}'})" class="py-3.5 text-sm font-medium border-b-2 transition-colors ${tab === t ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}">
+                  ${label}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Tab Body -->
+          <div class="flex-1 overflow-y-auto p-6">
+            ${tab === 'careplan' ? renderCarePlanTab(selected) : tab === 'orders' ? renderOrdersTab(selected) : renderPatientMsgTab(selected)}
+          </div>
+        ` : '<div class="flex-1 flex items-center justify-center text-gray-400">Select a patient</div>'}
+      </div>
+    </div>
+
+    <!-- Refer Modal -->
+    <div id="referModal" class="hidden fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 fade-in">
+        <h3 class="text-lg font-bold text-gray-900 mb-1">Refer ${selected?.name}</h3>
+        <p class="text-sm text-gray-500 mb-5">Select a colleague to refer this patient to. You'll earn a commission on all orders placed through their care plan.</p>
+        <div class="space-y-3">
+          ${doctors.filter(d => d.id !== 1).map(d => `
+            <div onclick="handleReferral(${selected?.id}, ${d.id})" class="p-4 border border-gray-200 rounded-xl hover:border-indigo-300 hover:bg-indigo-50 cursor-pointer transition-all">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">${d.avatar}</div>
+                <div class="flex-1">
+                  <div class="font-semibold text-gray-900 text-sm">${d.name}</div>
+                  <div class="text-xs text-gray-500">${d.specialty}</div>
+                </div>
+                <div class="text-right">
+                  <div class="text-sm font-bold text-emerald-600">15%</div>
+                  <div class="text-xs text-gray-400">commission</div>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <button onclick="document.getElementById('referModal').classList.add('hidden')" class="mt-4 w-full py-2.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-xl transition-colors">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Add Product Modal -->
+    <div id="productModal" class="hidden fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 fade-in" style="max-height:85vh;overflow-y:auto;">
+        <div class="flex items-start justify-between mb-5">
+          <div>
+            <h3 class="text-lg font-bold text-gray-900">Add to Care Plan</h3>
+            <p class="text-sm text-gray-400 mt-0.5">Recommend products or labs for ${selected?.name}</p>
+          </div>
+          <button onclick="document.getElementById('productModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <!-- Category Filters -->
+        <div class="flex gap-2 mb-4">
+          <span class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium">All</span>
+          <span class="px-3 py-1.5 bg-violet-100 text-violet-700 rounded-lg text-xs font-medium">Peptides</span>
+          <span class="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-medium">Supplements</span>
+          <span class="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium">Labs</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          ${products.map(prod => {
+            const inPlan = selected?.carePlan.includes(prod.id)
+            return `
+              <div onclick="${inPlan ? '' : `addToPlan(${selected?.id}, ${prod.id})`}" class="p-4 border ${inPlan ? 'border-emerald-300 bg-emerald-50 cursor-default' : 'border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 cursor-pointer'} rounded-xl transition-all">
+                <div class="flex items-start gap-3">
+                  <span class="text-2xl flex-shrink-0">${prod.icon}</span>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <span class="font-semibold text-sm text-gray-900">${prod.name}</span>
+                      ${categoryBadge(prod.category)}
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-2">${prod.description}</p>
+                    <div class="mt-2.5 flex items-center justify-between">
+                      <span class="text-sm font-bold text-gray-900">$${prod.price}</span>
+                      ${inPlan ? '<span class="text-xs text-emerald-600 font-semibold">✓ In care plan</span>' : '<span class="text-xs text-indigo-600 font-semibold">+ Add to plan</span>'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `
+          }).join('')}
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+function renderCarePlanTab(patient) {
+  const planItems = products.filter(p => patient.carePlan.includes(p.id))
+  return `
+    <div>
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="font-semibold text-gray-800">Care Plan <span class="text-gray-400 font-normal">(${planItems.length} items)</span></h2>
+        <button id="addProductBtn" class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium">+ Add Product or Lab</button>
+      </div>
+      <div class="space-y-3 mb-6">
+        ${planItems.map(prod => `
+          <div class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm flex items-center gap-4">
+            <span class="text-3xl flex-shrink-0">${prod.icon}</span>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-semibold text-gray-900">${prod.name}</span>
+                ${categoryBadge(prod.category)}
+              </div>
+              <p class="text-sm text-gray-500 mt-1 leading-relaxed">${prod.description}</p>
+            </div>
+            <div class="text-right flex-shrink-0 pl-4">
+              <div class="font-bold text-gray-900">$${prod.price}</div>
+              <button onclick="removeFromPlan(${patient.id}, ${prod.id})" class="text-xs text-rose-400 hover:text-rose-600 mt-1 transition-colors">Remove</button>
+            </div>
+          </div>
+        `).join('')}
+        ${planItems.length === 0 ? `
+          <div class="bg-white border-2 border-dashed border-gray-200 rounded-xl p-10 text-center">
+            <div class="text-3xl mb-3">📋</div>
+            <div class="text-gray-400 text-sm">No items in care plan yet.</div>
+            <div class="text-gray-300 text-xs mt-1">Click "Add Product or Lab" to get started.</div>
+          </div>
+        ` : ''}
+      </div>
+
+      <!-- Instructions -->
+      <div class="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 class="font-semibold text-gray-800 text-sm">Care Instructions</h3>
+          <span class="text-xs text-gray-400">Visible to patient</span>
+        </div>
+        <div class="p-5">
+          <textarea id="instrField" class="w-full text-sm text-gray-700 bg-slate-50 rounded-lg p-4 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none leading-relaxed" rows="5">${patient.instructions || ''}</textarea>
+          <button onclick="saveInstructions(${patient.id})" class="mt-3 px-4 py-2 text-sm bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors font-medium">Save Instructions</button>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+function renderOrdersTab(patient) {
+  return `
+    <div>
+      <h2 class="font-semibold text-gray-800 mb-5">Order History</h2>
+      ${patient.orders.length > 0 ? `
+        <div class="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-50 border-b border-gray-100">
+              <tr class="text-xs text-gray-400 uppercase tracking-wide">
+                <th class="px-5 py-3.5 text-left">Product</th>
+                <th class="px-5 py-3.5 text-left">Date</th>
+                <th class="px-5 py-3.5 text-left">Status</th>
+                <th class="px-5 py-3.5 text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              ${patient.orders.map(o => `
+                <tr class="hover:bg-slate-50 transition-colors">
+                  <td class="px-5 py-4 font-medium text-gray-900">${o.product}</td>
+                  <td class="px-5 py-4 text-gray-500">${o.date}</td>
+                  <td class="px-5 py-4">${statusBadge(o.status)}</td>
+                  <td class="px-5 py-4 text-right font-semibold text-gray-900">$${o.amount}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : `
+        <div class="bg-white border-2 border-dashed border-gray-200 rounded-xl p-10 text-center">
+          <div class="text-3xl mb-3">📦</div>
+          <div class="text-gray-400 text-sm">No orders yet for this patient.</div>
+        </div>
+      `}
+    </div>
+  `
+}
+
+function renderPatientMsgTab(patient) {
+  const conv = messages.filter(m => m.from === 'patient_' + patient.id || m.to === 'patient_' + patient.id)
+  return `
+    <div>
+      <h2 class="font-semibold text-gray-800 mb-5">Message Thread</h2>
+      <div class="bg-white border border-gray-100 rounded-xl shadow-sm p-5 space-y-4 max-h-72 overflow-y-auto mb-4">
+        ${conv.length > 0 ? conv.map(msg => {
+          const isDoc = msg.from === 'doctor_1'
+          return `
+            <div class="flex ${isDoc ? 'justify-end' : 'justify-start'}">
+              <div class="max-w-sm">
+                <div class="text-xs text-gray-400 mb-1 ${isDoc ? 'text-right' : ''}">${isDoc ? 'Dr. Chen' : patient.name} · ${msg.time}</div>
+                <div class="px-4 py-3 rounded-2xl text-sm leading-relaxed ${isDoc ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-gray-800'}">${msg.text}</div>
+              </div>
+            </div>
+          `
+        }).join('') : '<p class="text-gray-400 text-sm text-center py-4">No messages yet.</p>'}
+      </div>
+      <div class="flex gap-3">
+        <input type="text" placeholder="Type a message to ${patient.name}..." class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <button onclick="showNotification('Message sent to ${patient.name}')" class="px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors">Send</button>
+      </div>
+    </div>
+  `
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOCTOR — REFERRALS
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderDoctorReferrals() {
+  const myOutbound = referrals.filter(r => r.fromDoctorId === 1)
+  const myInbound = referrals.filter(r => r.toDoctorId === 1)
+  const totalEarned = myInbound.reduce((s, r) => s + r.earned, 0)
+
+  return wrap(doctorSidebar('doctorReferrals'), `
+    <div class="p-8 max-w-5xl fade-in">
+      <div class="mb-8">
+        <h1 class="text-2xl font-bold text-gray-900">Referral Network</h1>
+        <p class="text-gray-400 mt-1 text-sm">Manage referrals, track commissions, and grow your affiliate relationships</p>
+      </div>
+
+      <!-- Earnings Cards -->
+      <div class="grid grid-cols-3 gap-5 mb-8">
+        <div class="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-6 text-white">
+          <div class="text-sm opacity-80 mb-1">Total Referral Earnings</div>
+          <div class="text-4xl font-bold">$${doctors[0].earnings.toLocaleString()}</div>
+          <div class="text-sm opacity-70 mt-2">All time · ${myInbound.length} active referral${myInbound.length !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+          <div class="text-sm text-gray-500 mb-1">March 2026</div>
+          <div class="text-3xl font-bold text-gray-900">$380</div>
+          <div class="text-xs text-emerald-600 mt-2 font-medium">↑ 24% vs February</div>
+        </div>
+        <div class="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+          <div class="text-sm text-gray-500 mb-1">Pending Payout</div>
+          <div class="text-3xl font-bold text-amber-500">$${doctors[0].pendingEarnings}</div>
+          <div class="text-xs text-gray-400 mt-2">Processes April 1, 2026</div>
+        </div>
+      </div>
+
+      <!-- How It Works -->
+      <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-6 mb-8">
+        <h3 class="font-semibold text-indigo-900 mb-4 text-sm uppercase tracking-wide">How the Affiliate Program Works</h3>
+        <div class="grid grid-cols-3 gap-6">
+          ${[
+            ['1', 'Refer a Patient', 'Open any patient profile and click "Refer Patient" to send them to a specialist in the network.'],
+            ['2', 'Colleague Treats Them', 'The receiving doctor creates their own care plan, recommends products and labs.'],
+            ['3', 'You Earn Commission', 'You automatically receive 15% of every order that patient places — indefinitely while the referral is active.'],
+          ].map(([n, title, desc]) => `
+            <div class="flex gap-3">
+              <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">${n}</div>
+              <div>
+                <div class="font-semibold text-indigo-900 text-sm">${title}</div>
+                <div class="text-sm text-indigo-700 mt-1 leading-relaxed">${desc}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Referrals Table -->
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm mb-6">
+        <div class="p-5 border-b border-gray-100">
+          <h2 class="font-semibold text-gray-800">Active Referrals</h2>
+        </div>
+        <div class="divide-y divide-gray-50">
+          ${referrals.map(r => {
+            const fromDoc = doctors.find(d => d.id === r.fromDoctorId)
+            const toDoc = doctors.find(d => d.id === r.toDoctorId)
+            const pat = patients.find(p => p.id === r.patientId)
+            const isMine = r.fromDoctorId === 1
+            return `
+              <div class="p-5 flex items-center gap-5">
+                <div class="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm flex-shrink-0">${pat?.avatar}</div>
+                <div class="flex-1">
+                  <div class="font-medium text-gray-900 text-sm">${pat?.name}</div>
+                  <div class="text-xs text-gray-500 mt-0.5">
+                    ${isMine
+                      ? `You referred to <strong class="text-gray-700">${toDoc?.name}</strong> (${toDoc?.specialty})`
+                      : `Referred to you by <strong class="text-gray-700">${fromDoc?.name}</strong> (${fromDoc?.specialty})`
+                    }
+                  </div>
+                  <div class="text-xs text-gray-400 mt-0.5">Since ${r.date}</div>
+                </div>
+                <div class="text-center">
+                  <div class="text-sm font-bold ${isMine ? 'text-gray-600' : 'text-emerald-600'}">${r.commissionRate * 100}% commission</div>
+                  <div class="text-xs text-gray-400">${isMine ? 'you give' : 'you receive'}</div>
+                </div>
+                ${statusBadge(r.status)}
+                <div class="text-right w-20">
+                  <div class="text-base font-bold ${isMine ? 'text-gray-500' : 'text-emerald-600'}">$${r.earned}</div>
+                  <div class="text-xs text-gray-400">earned</div>
+                </div>
+              </div>
+            `
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Colleague Network -->
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm">
+        <div class="p-5 border-b border-gray-100">
+          <h2 class="font-semibold text-gray-800">Colleague Network</h2>
+          <p class="text-xs text-gray-400 mt-0.5">Invite colleagues to join PeptideRx and expand your referral network</p>
+        </div>
+        <div class="p-5 grid grid-cols-2 gap-4">
+          ${doctors.filter(d => d.id !== 1).map(d => `
+            <div class="flex items-center gap-4 p-4 border border-gray-100 rounded-xl hover:border-indigo-200 hover:bg-indigo-50 transition-all">
+              <div class="w-11 h-11 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold">${d.avatar}</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-gray-900 text-sm">${d.name}</div>
+                <div class="text-xs text-gray-500">${d.specialty}</div>
+                <div class="text-xs text-emerald-600 mt-0.5">$${d.earnings.toLocaleString()} network earnings</div>
+              </div>
+              <button onclick="showNotification('Invite sent to ${d.name}')" class="px-3 py-1.5 text-xs border border-indigo-300 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors font-medium flex-shrink-0">Invite</button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOCTOR — MESSAGES
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderDoctorMessages() {
+  const threadPatients = [patients[0], patients[1]]
+  const sel = threadPatients[0]
+  const conv = messages.filter(m => m.from === 'patient_1' || m.to === 'patient_1')
+
+  return wrap(doctorSidebar('doctorMessages'), `
+    <div class="flex h-screen overflow-hidden fade-in">
+      <!-- Thread List -->
+      <div class="w-80 bg-white border-r border-gray-100 flex flex-col flex-shrink-0">
+        <div class="p-5 border-b border-gray-100">
+          <h2 class="font-semibold text-gray-800">Messages</h2>
+          <input type="text" placeholder="Search conversations..." class="mt-3 w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div class="flex-1 overflow-y-auto divide-y divide-gray-50">
+          ${threadPatients.map((p, i) => {
+            const lastMsg = messages.filter(m => m.from === 'patient_' + p.id || m.to === 'patient_' + p.id).pop()
+            const hasUnread = messages.some(m => m.from === 'patient_' + p.id && !m.read)
+            return `
+              <div class="p-4 hover:bg-slate-50 cursor-pointer transition-colors ${i === 0 ? 'bg-indigo-50' : ''}">
+                <div class="flex items-start gap-3">
+                  <div class="relative flex-shrink-0">
+                    <div class="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm">${p.avatar}</div>
+                    ${hasUnread ? '<div class="absolute -top-0.5 -right-0.5 w-3 h-3 bg-indigo-500 rounded-full border-2 border-white"></div>' : ''}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between">
+                      <span class="font-medium text-sm text-gray-900">${p.name}</span>
+                      <span class="text-xs text-gray-400">${lastMsg?.time}</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">${lastMsg?.text}</p>
+                  </div>
+                </div>
+              </div>
+            `
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Chat -->
+      <div class="flex-1 flex flex-col overflow-hidden">
+        <div class="bg-white border-b border-gray-100 p-5 flex items-center gap-4 flex-shrink-0">
+          <div class="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm">${sel.avatar}</div>
+          <div class="flex-1">
+            <div class="font-semibold text-gray-900">${sel.name}</div>
+            <div class="text-xs text-gray-400">${sel.conditions.join(' · ')}</div>
+          </div>
+          <button onclick="navigate('doctorPatient', {selectedPatient: ${sel.id}})" class="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-slate-50 transition-colors text-gray-600">View Profile</button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 space-y-5">
+          ${conv.map(msg => {
+            const isDoc = msg.from === 'doctor_1'
+            return `
+              <div class="flex ${isDoc ? 'justify-end' : 'justify-start'}">
+                <div class="max-w-xl">
+                  <div class="text-xs text-gray-400 mb-1.5 ${isDoc ? 'text-right' : ''}">
+                    ${isDoc ? 'Dr. Sarah Chen' : sel.name} · ${msg.time}
+                  </div>
+                  <div class="px-4 py-3 rounded-2xl text-sm leading-relaxed ${isDoc ? 'bg-indigo-600 text-white' : 'bg-white border border-gray-200 text-gray-800 shadow-sm'}">
+                    ${msg.text}
+                  </div>
+                </div>
+              </div>
+            `
+          }).join('')}
+        </div>
+
+        <div class="bg-white border-t border-gray-100 p-4 flex gap-3 flex-shrink-0">
+          <input type="text" placeholder="Type a message to ${sel.name}..." class="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <button onclick="showNotification('Message sent')" class="px-5 py-3 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors">Send</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PATIENT DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderPatientDashboard() {
+  const patient = patients[0]
+  const doctor = doctors.find(d => d.id === patient.doctorId)
+  const planItems = products.filter(p => patient.carePlan.includes(p.id))
+  const processing = patient.orders.filter(o => o.status === 'processing').length
+
+  return wrap(patientSidebar('patientDashboard'), `
+    <div class="p-8 max-w-5xl fade-in">
+      <div class="mb-8">
+        <h1 class="text-2xl font-bold text-gray-900">Welcome back, John 👋</h1>
+        <p class="text-gray-400 mt-1 text-sm">Your care plan has been updated. Review your latest recommendations below.</p>
+      </div>
+
+      <!-- Cards -->
+      <div class="grid grid-cols-3 gap-5 mb-8">
+        <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+          <div class="text-xs text-gray-400 uppercase tracking-wide mb-3">Your Doctor</div>
+          <div class="flex items-center gap-3">
+            <div class="w-11 h-11 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">${doctor?.avatar}</div>
+            <div>
+              <div class="font-semibold text-gray-900 text-sm">${doctor?.name}</div>
+              <div class="text-xs text-gray-500">${doctor?.specialty}</div>
+            </div>
+          </div>
+          <button onclick="navigate('patientMessages')" class="mt-4 text-xs text-teal-600 font-medium hover:underline">Send a message →</button>
+        </div>
+        <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+          <div class="text-xs text-gray-400 uppercase tracking-wide mb-3">Care Plan</div>
+          <div class="text-3xl font-bold text-gray-900">${planItems.length}</div>
+          <div class="text-xs text-gray-400 mt-2">
+            ${planItems.filter(p => p.category === 'peptide').length} peptide${planItems.filter(p => p.category === 'peptide').length !== 1 ? 's' : ''} ·
+            ${planItems.filter(p => p.category === 'supplement').length} supplement${planItems.filter(p => p.category === 'supplement').length !== 1 ? 's' : ''} ·
+            ${planItems.filter(p => p.category === 'lab').length} lab test${planItems.filter(p => p.category === 'lab').length !== 1 ? 's' : ''}
+          </div>
+        </div>
+        <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+          <div class="text-xs text-gray-400 uppercase tracking-wide mb-3">Recent Orders</div>
+          <div class="text-3xl font-bold text-gray-900">${patient.orders.length}</div>
+          ${processing > 0 ? `<div class="text-xs text-amber-600 mt-2 font-medium">${processing} processing</div>` : '<div class="text-xs text-emerald-600 mt-2 font-medium">All delivered</div>'}
+        </div>
+      </div>
+
+      <!-- Care Plan -->
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm mb-6">
+        <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 class="font-semibold text-gray-800">Your Care Plan</h2>
+            <p class="text-xs text-gray-400 mt-0.5">Recommended by ${doctor?.name}</p>
+          </div>
+          <button onclick="navigate('patientShop')" class="px-4 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium">Order Now →</button>
+        </div>
+        <div class="divide-y divide-gray-50">
+          ${planItems.map(prod => `
+            <div class="p-5 flex items-center gap-4">
+              <span class="text-3xl flex-shrink-0">${prod.icon}</span>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-semibold text-gray-900">${prod.name}</span>
+                  ${categoryBadge(prod.category)}
+                </div>
+                <p class="text-sm text-gray-500 mt-1 leading-relaxed">${prod.description}</p>
+              </div>
+              <div class="text-right flex-shrink-0 pl-4">
+                <div class="font-bold text-gray-900">$${prod.price}</div>
+                <button onclick="addToCart(${prod.id}); navigate('patientShop')" class="mt-1 text-xs text-teal-600 hover:text-teal-800 font-medium transition-colors">Order →</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Instructions -->
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm">
+        <div class="p-5 border-b border-gray-100">
+          <h2 class="font-semibold text-gray-800">Instructions from Dr. Chen</h2>
+        </div>
+        <div class="p-5">
+          <div class="bg-slate-50 rounded-xl p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-line border border-slate-100">${patient.instructions}</div>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PATIENT — SHOP
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderPatientShop() {
+  const patient = patients[0]
+  const planItems = products.filter(p => patient.carePlan.includes(p.id))
+  const cartItems = products.filter(p => state.cart.includes(p.id))
+  const cartTotal = cartItems.reduce((s, p) => s + p.price, 0)
+
+  return wrap(patientSidebar('patientShop'), `
+    <div class="p-8 max-w-5xl fade-in">
+      <div class="mb-8 flex items-start justify-between gap-6">
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900">Shop & Order</h1>
+          <p class="text-gray-400 mt-1 text-sm">Doctor-recommended products and lab tests, shipped to your door.</p>
+        </div>
+
+        <!-- Cart -->
+        ${state.cart.length > 0 ? `
+          <div class="bg-white border border-gray-100 shadow-sm rounded-xl p-5 w-72 flex-shrink-0">
+            <h3 class="font-semibold text-gray-800 mb-3 text-sm">Cart (${cartItems.length} item${cartItems.length !== 1 ? 's' : ''})</h3>
+            <div class="space-y-2">
+              ${cartItems.map(prod => `
+                <div class="flex items-center justify-between text-sm">
+                  <span class="text-gray-700 flex items-center gap-1.5"><span>${prod.icon}</span> ${prod.name}</span>
+                  <span class="font-medium text-gray-900">$${prod.price}</span>
+                </div>
+              `).join('')}
+            </div>
+            <div class="border-t border-gray-100 mt-3 pt-3 flex items-center justify-between">
+              <span class="font-semibold text-gray-800 text-sm">Total</span>
+              <span class="font-bold text-gray-900">$${cartTotal}</span>
+            </div>
+            <button onclick="checkout()" class="mt-3 w-full bg-teal-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-teal-700 transition-colors">Place Order →</button>
+            <button onclick="state.cart = []; render()" class="mt-1.5 w-full text-xs text-gray-400 hover:text-gray-600 py-1 transition-colors">Clear cart</button>
+          </div>
+        ` : ''}
+      </div>
+
+      <div class="text-xs text-gray-400 uppercase tracking-widest font-medium mb-4">Recommended for You</div>
+      <div class="grid grid-cols-2 gap-5">
+        ${planItems.map(prod => {
+          const inCart = state.cart.includes(prod.id)
+          return `
+            <div class="bg-white border border-gray-100 rounded-xl shadow-sm p-5 flex gap-4 transition-all hover:shadow-md">
+              <span class="text-4xl flex-shrink-0">${prod.icon}</span>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap mb-1">
+                  <h3 class="font-semibold text-gray-900">${prod.name}</h3>
+                  ${categoryBadge(prod.category)}
+                </div>
+                <p class="text-sm text-gray-500 leading-relaxed">${prod.description}</p>
+                <div class="mt-4 flex items-end justify-between gap-3">
+                  <div>
+                    <span class="text-2xl font-bold text-gray-900">$${prod.price}</span>
+                    <span class="text-sm text-gray-400 ml-1">/ ${prod.unit}</span>
+                  </div>
+                  <button onclick="addToCart(${prod.id})" class="px-4 py-2 text-sm font-semibold rounded-xl transition-colors flex-shrink-0 ${inCart ? 'bg-emerald-100 text-emerald-700' : 'bg-teal-600 text-white hover:bg-teal-700'}">
+                    ${inCart ? '✓ In Cart' : 'Add to Cart'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          `
+        }).join('')}
+      </div>
+    </div>
+  `)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PATIENT — MESSAGES
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderPatientMessages() {
+  const patient = patients[0]
+  const doctor = doctors.find(d => d.id === patient.doctorId)
+  const conv = messages.filter(m => m.from === 'patient_1' || m.to === 'patient_1')
+
+  return wrap(patientSidebar('patientMessages'), `
+    <div class="flex h-screen overflow-hidden fade-in">
+      <div class="w-80 bg-white border-r border-gray-100 flex flex-col flex-shrink-0">
+        <div class="p-5 border-b border-gray-100">
+          <h2 class="font-semibold text-gray-800">Messages</h2>
+        </div>
+        <div class="p-4">
+          <div class="p-4 bg-teal-50 border border-teal-100 rounded-xl cursor-pointer">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">${doctor?.avatar}</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-gray-900 text-sm">${doctor?.name}</div>
+                <div class="text-xs text-gray-500">${doctor?.specialty}</div>
+              </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-2 line-clamp-1">Yes, continue with the current protocol...</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex-1 flex flex-col overflow-hidden">
+        <div class="bg-white border-b border-gray-100 p-5 flex items-center gap-4 flex-shrink-0">
+          <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">${doctor?.avatar}</div>
+          <div>
+            <div class="font-semibold text-gray-900">${doctor?.name}</div>
+            <div class="text-xs text-gray-500">${doctor?.specialty}</div>
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 space-y-5">
+          ${conv.map(msg => {
+            const isDoc = msg.from === 'doctor_1'
+            return `
+              <div class="flex ${isDoc ? 'justify-start' : 'justify-end'}">
+                <div class="max-w-xl">
+                  <div class="text-xs text-gray-400 mb-1.5 ${isDoc ? '' : 'text-right'}">
+                    ${isDoc ? doctor?.name : patient.name} · ${msg.time}
+                  </div>
+                  <div class="px-4 py-3 rounded-2xl text-sm leading-relaxed ${isDoc ? 'bg-white border border-gray-200 text-gray-800 shadow-sm' : 'bg-teal-600 text-white'}">
+                    ${msg.text}
+                  </div>
+                </div>
+              </div>
+            `
+          }).join('')}
+        </div>
+
+        <div class="bg-white border-t border-gray-100 p-4 flex gap-3 flex-shrink-0">
+          <input type="text" placeholder="Message Dr. Chen..." class="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+          <button onclick="showNotification('Message sent to Dr. Chen')" class="px-5 py-3 bg-teal-600 text-white rounded-xl text-sm font-medium hover:bg-teal-700 transition-colors">Send</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+// ─── HANDLERS ─────────────────────────────────────────────────────────────────
+function attachHandlers() {
+  const addBtn = document.getElementById('addProductBtn')
+  if (addBtn) addBtn.onclick = () => document.getElementById('productModal')?.classList.remove('hidden')
+
+  const refBtn = document.getElementById('referBtn')
+  if (refBtn) refBtn.onclick = () => document.getElementById('referModal')?.classList.remove('hidden')
+}
+
+function addToPlan(patientId, productId) {
+  const p = patients.find(p => p.id === patientId)
+  if (p && !p.carePlan.includes(productId)) {
+    p.carePlan.push(productId)
+    showNotification('Added to care plan')
+  }
+}
+
+function removeFromPlan(patientId, productId) {
+  const p = patients.find(p => p.id === patientId)
+  if (p) {
+    p.carePlan = p.carePlan.filter(id => id !== productId)
+    navigate('doctorPatient', { selectedPatient: patientId, patientTab: 'careplan' })
+  }
+}
+
+function saveInstructions(patientId) {
+  const p = patients.find(p => p.id === patientId)
+  const field = document.getElementById('instrField')
+  if (p && field) p.instructions = field.value
+  showNotification('Care instructions saved')
+}
+
+function addToCart(productId) {
+  if (!state.cart.includes(productId)) state.cart.push(productId)
+  showNotification('Added to cart')
+  render()
+}
+
+function checkout() {
+  const count = state.cart.length
+  state.cart = []
+  showNotification(`Order placed — ${count} item${count !== 1 ? 's' : ''} confirmed!`)
+}
+
+function handleReferral(patientId, toDoctorId) {
+  const toDoc = doctors.find(d => d.id === toDoctorId)
+  document.getElementById('referModal')?.classList.add('hidden')
+  showNotification(`Patient referred to ${toDoc?.name}`)
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+render()
+</script>
+</body>
+</html>
