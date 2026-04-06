@@ -25,6 +25,7 @@ const state = {
   selectedLab: null,
   labFilter: 'all',
   expandedOrder: null,
+  connectedIntegrations: ['jane'],
   checkinTab: 'submit',
   checkinSideEffects: false,
   selectedCheckin: null,
@@ -320,6 +321,7 @@ function render() {
     patientCheckins: renderPatientCheckins,
     doctorWallet: renderDoctorWallet,
     doctorCheckins: renderDoctorCheckins,
+    doctorIntegrations: renderDoctorIntegrations,
   }
   app.innerHTML = views[state.view]?.() ?? '<p class="p-8 text-gray-400">Unknown view</p>'
   attachHandlers()
@@ -358,6 +360,7 @@ function doctorSidebar(active) {
     { label: 'Labs', view: 'doctorLabs', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>', badge: labResults.filter(l => l.status === 'resulted').length || 0 },
     { label: 'Check-ins', view: 'doctorCheckins', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>', badge: checkins.filter(c => c.status === 'unreviewed').length || 0 },
     { label: 'Wallet', view: 'doctorWallet', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>' },
+    { label: 'Integrations', view: 'doctorIntegrations', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/></svg>' },
   ]
   return `
     <aside class="w-60 bg-gradient-to-b from-indigo-950 to-indigo-900 text-white flex flex-col min-h-screen fixed left-0 top-0 z-20">
@@ -2441,6 +2444,204 @@ function renderCheckinDetail(ci, scoreColor, scoreBg) {
       </div>
     </div>
   `
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOCTOR — INTEGRATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderDoctorIntegrations() {
+  const connected = state.connectedIntegrations || []
+
+  const integrations = {
+    scheduling: [
+      {
+        id: 'jane', name: 'Jane App', logo: 'JA', logoColor: 'bg-teal-500',
+        tagline: 'All-in-one practice management & scheduling',
+        description: 'Jane App is a full practice management platform used by thousands of health and wellness practitioners. Connect Jane to PeptideRx and your appointment calendar stays in perfect sync — automatically.',
+        features: ['Two-way appointment sync', 'Patient intake form import', 'Real-time availability display', 'Automated pre-visit reminders', 'Post-visit follow-up triggers'],
+        syncedAt: '2 minutes ago',
+      },
+      {
+        id: 'acuity', name: 'Acuity Scheduling', logo: 'AC', logoColor: 'bg-orange-500',
+        tagline: 'Flexible client scheduling & booking',
+        description: 'Acuity (by Squarespace) lets patients self-book appointments online. When connected, new Acuity bookings appear instantly in your PeptideRx dashboard alongside patient records.',
+        features: ['Patient self-booking sync', 'Calendar block management', 'Intake questionnaire mapping', 'SMS & email reminder passthrough'],
+        syncedAt: null,
+      },
+      {
+        id: 'simplepractice', name: 'SimplePractice', logo: 'SP', logoColor: 'bg-blue-500',
+        tagline: 'HIPAA-compliant EHR & scheduling',
+        description: 'SimplePractice is a leading EHR and practice management solution. The PeptideRx integration pulls scheduling data and surfaces relevant patient history directly in your care portal.',
+        features: ['Schedule & EHR sync', 'Insurance eligibility pass-through', 'SOAP note linking', 'Secure document sharing'],
+        syncedAt: null,
+      },
+      {
+        id: 'calendly', name: 'Calendly', logo: 'CL', logoColor: 'bg-indigo-500',
+        tagline: 'Automated scheduling for busy practitioners',
+        description: 'Let patients book telehealth consultations through your Calendly link. PeptideRx automatically creates a patient record and care plan draft the moment a new booking is confirmed.',
+        features: ['Auto patient record creation', 'Meeting link injection into portal', 'Buffer time management', 'Team scheduling support'],
+        syncedAt: null,
+      },
+    ],
+    labs: [
+      {
+        id: 'labcorp', name: 'LabCorp', logo: 'LC', logoColor: 'bg-red-500',
+        tagline: 'National laboratory network',
+        description: 'Order lab tests directly from PeptideRx and have results route back automatically. LabCorp\'s 2,000+ patient service centers nationwide mean your patients can collect specimens with ease.',
+        features: ['Direct lab order placement', 'Automatic result ingestion', 'Reference range mapping', 'Critical value alerts'],
+        syncedAt: null,
+      },
+      {
+        id: 'quest', name: 'Quest Diagnostics', logo: 'QD', logoColor: 'bg-blue-700',
+        tagline: 'Diagnostic testing & precision health',
+        description: 'Quest\'s extensive test menu — from hormones to metabolomics — integrates directly into PeptideRx care plans. Results populate the Labs tab automatically, flagging any out-of-range markers.',
+        features: ['2,200+ test catalog access', 'At-home kit dispatch', 'Structured result parsing', 'Longitudinal trend tracking'],
+        syncedAt: null,
+      },
+    ],
+    telehealth: [
+      {
+        id: 'zoom', name: 'Zoom for Healthcare', logo: 'ZM', logoColor: 'bg-blue-400',
+        tagline: 'HIPAA-compliant video visits',
+        description: 'Generate HIPAA-compliant Zoom meeting links directly from patient appointments in PeptideRx. The Join Call button in the telehealth tab connects patients to their session in one tap.',
+        features: ['Auto meeting link generation', 'Waiting room support', 'Session recording (with consent)', 'End-to-end encryption'],
+        syncedAt: null,
+      },
+      {
+        id: 'livekit', name: 'LiveKit', logo: 'LK', logoColor: 'bg-violet-500',
+        tagline: 'Embedded real-time video infrastructure',
+        description: 'LiveKit powers native in-portal video consultations — no external app required. Patients join their telehealth visit without leaving PeptideRx, creating a seamless white-labeled experience.',
+        features: ['Native in-portal video', 'White-label experience', 'Screen sharing & annotation', 'Sub-200ms latency'],
+        syncedAt: null,
+      },
+    ],
+    payments: [
+      {
+        id: 'payman', name: 'Payman', logo: 'PM', logoColor: 'bg-emerald-600',
+        tagline: 'Wallet, payouts & commission routing',
+        description: 'Payman powers the PeptideRx wallet — processing patient payments, calculating referral commissions, and routing ACH payouts to your bank. Already active on your account.',
+        features: ['Commission auto-calculation', 'ACH payout scheduling', 'Multi-party payment splitting', 'Real-time transaction ledger'],
+        syncedAt: 'Active',
+        alwaysOn: true,
+      },
+      {
+        id: 'stripe', name: 'Stripe', logo: 'ST', logoColor: 'bg-purple-500',
+        tagline: 'Card payments & billing infrastructure',
+        description: 'Connect Stripe to accept credit and debit card payments from patients directly through the portal. Supports one-time purchases, subscriptions, and installment plans for treatment packages.',
+        features: ['Credit & debit card acceptance', 'Subscription billing', 'Automatic invoicing', 'Dispute management dashboard'],
+        syncedAt: null,
+      },
+    ],
+  }
+
+  const sections = [
+    { key: 'scheduling',  label: 'Scheduling',              description: 'Sync your existing booking system so appointments and patient data flow into PeptideRx automatically.', featured: true },
+    { key: 'labs',        label: 'Lab Partners',            description: 'Order diagnostics and receive structured results directly within patient care plans.' },
+    { key: 'telehealth',  label: 'Telehealth & Video',      description: 'Power HIPAA-compliant video visits natively or through your preferred video platform.' },
+    { key: 'payments',    label: 'Payments & Billing',      description: 'Process payments, manage commissions, and configure payout schedules.' },
+  ]
+
+  const connectedAll = Object.values(integrations).flat().filter(i => connected.includes(i.id))
+
+  function integrationCard(intg) {
+    const isConnected = connected.includes(intg.id)
+    return `
+      <div class="bg-white border ${isConnected ? 'border-indigo-200 ring-1 ring-indigo-100' : 'border-gray-100'} rounded-2xl p-5 shadow-sm flex flex-col">
+        <div class="flex items-start justify-between gap-3 mb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-11 h-11 rounded-xl ${intg.logoColor} flex items-center justify-center text-white font-bold text-sm flex-shrink-0">${intg.logo}</div>
+            <div>
+              <div class="font-bold text-gray-900 text-sm">${intg.name}</div>
+              <div class="text-xs text-gray-400 mt-0.5">${intg.tagline}</div>
+            </div>
+          </div>
+          ${isConnected
+            ? `<span class="text-xs bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full font-semibold flex-shrink-0 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block"></span> Connected</span>`
+            : ''
+          }
+        </div>
+        <p class="text-xs text-gray-500 leading-relaxed flex-1 mb-4">${intg.description}</p>
+        <ul class="space-y-1.5 mb-5">
+          ${intg.features.map(f => `
+            <li class="flex items-center gap-2 text-xs text-gray-600">
+              <svg class="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              ${f}
+            </li>
+          `).join('')}
+        </ul>
+        <div class="flex items-center justify-between gap-3 pt-4 border-t border-gray-50">
+          ${isConnected ? `
+            <span class="text-xs text-gray-400">Synced ${intg.syncedAt}</span>
+            <div class="flex gap-2">
+              ${!intg.alwaysOn ? `<button onclick="toggleIntegration('${intg.id}')" class="text-xs text-rose-400 hover:text-rose-600 transition-colors font-medium">Disconnect</button>` : ''}
+              <button onclick="showNotification('Opening ${intg.name} settings...')" class="px-3 py-1.5 text-xs font-semibold border border-gray-200 rounded-lg hover:bg-slate-50 transition-colors text-gray-600">Settings</button>
+            </div>
+          ` : `
+            <span class="text-xs text-gray-300">Not connected</span>
+            <button onclick="toggleIntegration('${intg.id}')" class="px-4 py-1.5 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">Connect</button>
+          `}
+        </div>
+      </div>
+    `
+  }
+
+  return wrap(doctorSidebar('doctorIntegrations'), `
+    <div class="p-8 max-w-6xl fade-in">
+      <div class="mb-8">
+        <h1 class="text-2xl font-bold text-gray-900">Integrations</h1>
+        <p class="text-gray-400 mt-1 text-sm">Connect PeptideRx to the tools you already use — scheduling, labs, telehealth, and payments.</p>
+      </div>
+
+      <!-- Connected Banner -->
+      ${connectedAll.length > 0 ? `
+        <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 mb-8 flex items-center gap-5 flex-wrap">
+          <div class="flex items-center gap-2 text-emerald-800">
+            <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span class="font-semibold text-sm">${connectedAll.length} active connection${connectedAll.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div class="flex gap-2 flex-wrap">
+            ${connectedAll.map(i => `
+              <div class="flex items-center gap-1.5 bg-white border border-emerald-200 rounded-lg px-3 py-1.5">
+                <div class="w-4 h-4 rounded ${i.logoColor} flex items-center justify-center text-white text-xs font-bold">${i.logo.charAt(0)}</div>
+                <span class="text-xs font-medium text-gray-700">${i.name}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      ${sections.map(section => {
+        const items = integrations[section.key]
+        return `
+          <div class="mb-10">
+            <div class="flex items-start gap-3 mb-5">
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-1">
+                  <h2 class="font-bold text-gray-900">${section.label}</h2>
+                  ${section.featured ? `<span class="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full font-semibold">Featured</span>` : ''}
+                </div>
+                <p class="text-sm text-gray-400">${section.description}</p>
+              </div>
+            </div>
+            ${section.featured ? `
+              <div class="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 rounded-2xl p-5 mb-5 flex items-start gap-4">
+                <div class="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                </div>
+                <div>
+                  <div class="font-semibold text-indigo-900 text-sm mb-1">Keep using the scheduling system you love</div>
+                  <p class="text-sm text-indigo-700 leading-relaxed">PeptideRx is built to complement your existing workflow, not replace it. Connect your scheduling system below and patient bookings will appear automatically — no double-entry, no disruption.</p>
+                </div>
+              </div>
+            ` : ''}
+            <div class="grid grid-cols-2 gap-4">
+              ${items.map(integrationCard).join('')}
+            </div>
+          </div>
+        `
+      }).join('')}
+    </div>
+  `)
 }
 
 // ─── HANDLERS ─────────────────────────────────────────────────────────────────
